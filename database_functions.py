@@ -94,7 +94,7 @@ def extract_bar_data(data):
     df = pd.DataFrame(data)
 
     # Extract the 'mid' column into separate 'open', 'high', 'low', and 'close' columns
-    df[['open', 'high', 'low', 'close']] = df['mid'].apply(lambda x: pd.Series([x['o'], x['h'], x['l'], x['c']]))
+    df[['open', 'high', 'low', 'close']] = df['mid'].apply(lambda x: pd.Series([x['o'], x['h'], x['l'], x['c']]).astype(float))
 
     # Drop the 'mid' column as it's no longer needed
     df.drop(columns=['mid'], inplace=True)
@@ -237,7 +237,7 @@ def fetch_historical_data(instrument, granularity, count, access_token):
                 save_historical_data(api_data, instrument, granularity)
                 return extract_bar_data(api_data)
             bar_df = pd.DataFrame(result, columns=['time', 'open', 'high', 'low', 'close', 'volume', 'complete']).sort_values(by='time').reset_index(drop=True)
-
+            bar_df[['open', 'high', 'low', 'close']] = bar_df[['open', 'high', 'low', 'close']].astype(float)
             latest_bar_time = parse_iso8601_date(bar_df.iloc[-1]['time'])  # Assuming the data is sorted in ascending order
             if datetime.utcnow() > latest_bar_time + timedelta(minutes=granularity_to_minutes(granularity)):
 

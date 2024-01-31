@@ -25,18 +25,19 @@ if __name__ == '__main__':
     load_dotenv()
     access_token = os.getenv('DEMO_ACCESS_TOKEN')
 
+    # help(ta.thermo)
 
     #set_instruments_table(access_token)
 
     # Example usage
     algo = OandaGrid(access_token=access_token, instrument='EUR_USD', environment="practice")
-    pos = algo.select_instrument_based_on_chop()
-    print(pos)
+    # pos = algo.select_instrument_based_on_chop()
+    # print(pos)
     # help(ta.chop)
-    # while True:
-    #     algo.run_strategy()
-    #     time.sleep(1)
-    #     # Sleep or wait for a specific time before next iteration
+    while True:
+        algo.run_strategy()
+        time.sleep(10)
+        # Sleep or wait for a specific time before next iteration
 
 
 

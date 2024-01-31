@@ -22,7 +22,7 @@ class OandaGrid:
         self.set_account_instruments()
         self.instrument = instrument
         self.grid_settings = {
-            "size_pct": 0.001,
+            "size_pct": 0.0001,
             "num": 5,
             "tp_pct": 0.01,
             "sl_pct": 0.01,
@@ -32,13 +32,12 @@ class OandaGrid:
         self.is_grid_active = False
         self.grid_setup_time = datetime.utcnow() - timedelta(days=8)
         self.is_ranging = None
-        self.reset_grid()
+
 
     def initialize_grid_parameters(self):
         self.set_conversion_factors()
-        self.pip_location = self.get_pip_location()
-        self.place_grid_orders(is_buy=True)
-        self.place_grid_orders(is_buy=False)
+        self.pip_value = self.get_pip_value()
+
 
     def set_account_instruments(self):
         r = accounts.AccountInstruments(accountID=self.account_id)
@@ -47,7 +46,6 @@ class OandaGrid:
 
     def get_primary_account_id(self):
         accounts_response = self.api.request(accounts.AccountList())
-        print(accounts_response)
         return accounts_response['accounts'][0]['id']
 
     def get_account_balance(self):
@@ -67,43 +65,71 @@ class OandaGrid:
             volume = data['volume']
             return indicator_func(high=high, low=low, close=close, volume=volume, **kwargs).to_numpy()
 
-    def select_instrument_based_on_chop(self):
+    # def select_instrument_based_on_chop(self):
+    #     self.chop_settings = {"length": 14, "atr_length": 1, "high": 61.8, "low": 38.2}
+    #     self.fetch_settings = {"granularity": 'D', "count": 30}
+    #     viable_ranging_instruments = []  # Change to a list
+    #     viable_trending_instruments = []  # Change to a list
+    #
+    #     for instrument in get_instrument_list():
+    #         data = fetch_historical_data(instrument=instrument, **self.fetch_settings, access_token=self.access_token)
+    #         chop_values = self.compute_indicator(data=data, indicator_func=ta.chop, include_volume=False,
+    #                                              length=self.chop_settings['length'])
+    #
+    #         if chop_values[-1] > self.chop_settings['high'] and chop_values[-2] <= self.chop_settings['high']:
+    #             viable_ranging_instruments.append(
+    #                 {"instrument": instrument, "chop_value": chop_values[-1]})  # Use append
+    #             logging.info(
+    #                 f"Instrument: {instrument} is a viable instrument for grid, Last CHOP Value: {chop_values[-1]}")
+    #         elif chop_values[-1] < self.chop_settings['low'] and chop_values[-2] >= self.chop_settings['low']:
+    #             viable_trending_instruments.append(
+    #                 {"instrument": instrument, "chop_value": chop_values[-1]})  # Use append
+    #             logging.info(
+    #                 f"Instrument: {instrument} is trending, Last CHOP Value: {chop_values[-1]}")
+    #
+    #     if not viable_ranging_instruments and not viable_trending_instruments:
+    #         logging.warning("No viable instruments found using CHOP indicator. Exiting...")
+    #         return None
+    #
+    #     if viable_ranging_instruments:
+    #         self.is_ranging = True
+    #         # Find the dictionary with the max 'chop_value'
+    #         selected_instrument_info = max(viable_ranging_instruments, key=lambda x: x['chop_value'])
+    #         # Set 'self.instrument' to just the instrument identifier, not the entire dictionary
+    #         self.instrument = selected_instrument_info['instrument']
+    #         self.initialize_grid_parameters()
+    #         logging.info(f"Selected {self.instrument} for grid trading based on CHOP indicator.")
+    #
+    def set_instrument_based_on_chop(self):
         self.chop_settings = {"length": 14, "atr_length": 1, "high": 61.8, "low": 38.2}
         self.fetch_settings = {"granularity": 'D', "count": 30}
-        viable_ranging_instruments = []  # Change to a list
-        viable_trending_instruments = []  # Change to a list
-
+        highest_chop_value = 0
+        highest_chop_instrument = None
         for instrument in get_instrument_list():
             data = fetch_historical_data(instrument=instrument, **self.fetch_settings, access_token=self.access_token)
             chop_values = self.compute_indicator(data=data, indicator_func=ta.chop, include_volume=False,
                                                  length=self.chop_settings['length'])
 
-            if chop_values[-1] > self.chop_settings['high'] and chop_values[-2] <= self.chop_settings['high']:
-                viable_ranging_instruments.append(
-                    {"instrument": instrument, "chop_value": chop_values[-1]})  # Use append
+            if chop_values[-1] > self.chop_settings['high']:
+                if chop_values[-1] > highest_chop_value:
+                    highest_chop_value = chop_values[-1]
+                    highest_chop_instrument = instrument
                 logging.info(
                     f"Instrument: {instrument} is a viable instrument for grid, Last CHOP Value: {chop_values[-1]}")
-            elif chop_values[-1] < self.chop_settings['low'] and chop_values[-2] >= self.chop_settings['low']:
-                viable_trending_instruments.append(
-                    {"instrument": instrument, "chop_value": chop_values[-1]})  # Use append
-                logging.info(
-                    f"Instrument: {instrument} is trending, Last CHOP Value: {chop_values[-1]}")
 
-        if not viable_ranging_instruments and not viable_trending_instruments:
+
+        if highest_chop_instrument:
+            self.is_ranging = True
+            self.instrument = highest_chop_instrument
+            self.run_strategy()
+
+            logging.info(f"Selected {self.instrument} for grid trading based on CHOP indicator.")
+        else:
             logging.warning("No viable instruments found using CHOP indicator. Exiting...")
             return None
 
-        if viable_ranging_instruments:
-            self.is_ranging = True
-            # Find the dictionary with the max 'chop_value'
-            selected_instrument_info = max(viable_ranging_instruments, key=lambda x: x['chop_value'])
-            # Set 'self.instrument' to just the instrument identifier, not the entire dictionary
-            self.instrument = selected_instrument_info['instrument']
-            self.initialize_grid_parameters()
-            logging.info(f"Selected {self.instrument} for grid trading based on CHOP indicator.")
-
     def adjust_price_to_pip_location(self, price):
-        return round(price, abs(self.pip_location))
+        return round(price / self.pip_value) * self.pip_value
 
     def set_conversion_factors(self):
         response = self.api.request(
@@ -120,9 +146,9 @@ class OandaGrid:
                 current_price + (-price_adjustment if is_buy else price_adjustment))
             self.create_order(is_buy, order_price)
 
-    def get_pip_location(self):
+    def get_pip_value(self):
         try:
-            return int(get_instrument_value(self.instrument, 'pipLocation'))
+            return 10 ** abs(int(get_instrument_value(self.instrument, 'pipLocation')))
         except:
             logging.warning(f"Could not find pip location for {self.instrument}")
 
@@ -134,19 +160,19 @@ class OandaGrid:
             "takeProfitOnFill": {"price": str(take_profit)}, "stopLossOnFill": {"price": str(stop_loss)},
             "positionFill": "DEFAULT"
         }
-        # print(order_data)
         self.api.request(orders.OrderCreate(self.account_id, data={"order": order_data}))
 
     def calculate_order_size(self, is_buy):
         balance = self.get_account_balance()
+        # Base order size as a percentage of the balance
         order_size_base = balance * self.grid_settings["order_size_percent"] / 100
         current_price = self.get_current_price()
 
-        # Adjust order size based on the conversion factor
+        # Calculate the adjusted size based on the pip value
         if is_buy:
-            adjusted_size = order_size_base / current_price * self.conversion_factor_pos
+            adjusted_size = (order_size_base / current_price) * self.conversion_factor_pos * self.pip_value
         else:
-            adjusted_size = order_size_base / current_price * self.conversion_factor_neg
+            adjusted_size = (order_size_base / current_price) * self.conversion_factor_neg * self.pip_value
 
         return int(adjusted_size) if is_buy else -int(adjusted_size)
 
@@ -183,18 +209,19 @@ class OandaGrid:
             self.api.request(r)
 
     def run_strategy(self):
-        if datetime.utcnow() >= self.timer + timedelta(hours=24):
-            self.select_instrument_based_on_chop()
+        if datetime.utcnow() <= self.timer + timedelta(hours=24):
+            self.set_instrument_based_on_chop()
             if self.is_market_condition_favorable():
                 self.activate_grid()
 
     def is_market_condition_favorable(self):
         # Implementation to check market conditions based on indicators
-        pass
+        return True
 
     def activate_grid(self):
         if not self.is_grid_active:
             self.is_grid_active = True
+            self.initialize_grid_parameters()
             self.place_grid_orders(is_buy=True)
             self.place_grid_orders(is_buy=False)
             self.grid_setup_time = datetime.utcnow()

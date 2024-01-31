@@ -1,0 +1,4 @@
+oandapyv20
+pandas_ta
+requests
+python-dotenv

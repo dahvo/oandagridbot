@@ -1,0 +1,797 @@
+Index: tools/my_tools.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from oandapyV20 import API\r\nimport oandapyV20.endpoints.accounts as accounts\r\nimport oandapyV20.endpoints.instruments as instruments\r\nimport pandas as pd\r\n\r\n\r\n\r\ndef get_account_instruments(account_id, access_token):\r\n    client = API(access_token=access_token)\r\n    r = accounts.AccountInstruments(accountID=account_id)\r\n    client.request(r)\r\n    return r.response.get('instruments')\r\n\r\ndef get_historical_data(count, granularity='D', access_token=None, instrument='EUR_USD'):\r\n\r\n\r\n    client = API(access_token=access_token)\r\n\r\n    params = {\r\n        \"count\": count,\r\n        \"granularity\": granularity,\r\n    }\r\n    r = instruments.InstrumentsCandles(instrument=instrument, params=params)\r\n    resp = client.request(r)\r\n    return resp.get('candles')\r\n\r\nif __name__ == '__main__':\r\n    access_token = \"eeac3f2b6e1d03b113bfe7a89f42629e-4c628a07f4d115aa5e3e1e74dc55fc7f\"\r\n    data = get_historical_data(5, access_token=access_token)\r\n    print(data)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/tools/my_tools.py b/tools/my_tools.py
+--- a/tools/my_tools.py	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ b/tools/my_tools.py	(date 1706824135645)
+@@ -24,7 +24,13 @@
+     resp = client.request(r)
+     return resp.get('candles')
+ 
++def compute_indicator(data, indicator_func, include_volume=False, **kwargs):
++    params = {'high': data['high'], 'low': data['low'], 'close': data['close']}
++    if include_volume:
++        params['volume'] = data['volume']
++    return indicator_func(**params, **kwargs).to_numpy()
++
+ if __name__ == '__main__':
+-    access_token = "eeac3f2b6e1d03b113bfe7a89f42629e-4c628a07f4d115aa5e3e1e74dc55fc7f"
+-    data = get_historical_data(5, access_token=access_token)
+-    print(data)
+\ No newline at end of file
++    pass
++    # print(get_account_instruments(account_id, access_token))
++    # print(get_historical_data(5, access_token=access_token))
+\ No newline at end of file
+Index: main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from MyStrat import OandaGrid\r\nfrom oandapyV20 import API\r\nfrom tools.my_tools import get_account_instruments, get_historical_data\r\nimport logging\r\nfrom database_functions import set_instruments_table, fetch_historical_data\r\nimport os\r\nfrom dotenv import load_dotenv\r\nimport time\r\nimport pandas_ta as ta\r\nimport pandas as pd\r\n\r\n\r\n\r\nlogging.basicConfig(\r\n    filename=\"logs/main.log\",\r\n    level=logging.INFO,\r\n    format='%(asctime)s [%(levelname)s] %(name)s : %(message)s',\r\n)\r\n\r\n\r\n\r\n\r\n\r\nif __name__ == '__main__':\r\n    load_dotenv()\r\n    access_token = os.getenv('DEMO_ACCESS_TOKEN')\r\n\r\n    # help(ta.thermo)\r\n\r\n    #set_instruments_table(access_token)\r\n\r\n    # Example usage\r\n    algo = OandaGrid(access_token=access_token, instrument='EUR_USD', environment=\"practice\")\r\n    # pos = algo.select_instrument_based_on_chop()\r\n    # print(pos)\r\n    # help(ta.chop)\r\n    while True:\r\n        algo.run_strategy()\r\n        time.sleep(10)\r\n        # Sleep or wait for a specific time before next iteration\r\n\r\n\r\n\r\n\r\n\r\n\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/main.py b/main.py
+--- a/main.py	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ b/main.py	(date 1706830767673)
+@@ -1,13 +1,11 @@
+-from MyStrat import OandaGrid
+-from oandapyV20 import API
+-from tools.my_tools import get_account_instruments, get_historical_data
++from src.main_bot import MainBot
+ import logging
+-from database_functions import set_instruments_table, fetch_historical_data
++
+ import os
+ from dotenv import load_dotenv
++
+ import time
+-import pandas_ta as ta
+-import pandas as pd
++
+ 
+ 
+ 
+@@ -25,19 +23,19 @@
+     load_dotenv()
+     access_token = os.getenv('DEMO_ACCESS_TOKEN')
+ 
+-    # help(ta.thermo)
++    environment = 'practice'
+ 
+-    #set_instruments_table(access_token)
++    main_bot = MainBot(access_token, environment)
+ 
+-    # Example usage
+-    algo = OandaGrid(access_token=access_token, instrument='EUR_USD', environment="practice")
+-    # pos = algo.select_instrument_based_on_chop()
+-    # print(pos)
+-    # help(ta.chop)
+     while True:
+-        algo.run_strategy()
+-        time.sleep(10)
+-        # Sleep or wait for a specific time before next iteration
++        try:
++            main_bot.run_strategies()
++        except Exception as e:
++            logging.error(f"Error: {e} traceback: {e.__traceback__}")
++            raise e
++        break
++
++
+ 
+ 
+ 
+Index: database_functions.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/database_functions.py b/src/database_functions.py
+rename from database_functions.py
+rename to src/database_functions.py
+--- a/database_functions.py	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ b/src/database_functions.py	(date 1706817855263)
+@@ -5,8 +5,6 @@
+ from datetime import datetime, timedelta
+ from contextlib import contextmanager
+ 
+-
+-
+ # Setup basic logging
+ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+ 
+@@ -17,7 +15,7 @@
+     try:
+         connection = sqlite3.connect(db_path)
+         yield connection
+-        connection.commit()  # Ensure commit happens here
++        connection.commit()
+     except Exception as e:
+         if connection:
+             connection.rollback()
+@@ -33,15 +31,15 @@
+     cursor = connection.cursor()
+     cursor.execute(query, parameters)
+     if fetch_one:
+-        #logging.info(f"Database query: {query} with parameters: {parameters} as a fetch_one query.")
++        # logging.info(f"Database query: {query} with parameters: {parameters} as a fetch_one query.")
+         return cursor.fetchone()
+     if fetch_all:
+-        #logging.info(f"Database query: {query} with parameters: {parameters} as a fetch_all query.")
++        # logging.info(f"Database query: {query} with parameters: {parameters} as a fetch_all query.")
+         return cursor.fetchall()
+ 
+ 
+ def set_instruments_table(data):
+-    #data = get_account_instruments(accountID, access_token)
++    # data = get_account_instruments(accountID, access_token)
+     with connect_to_db() as connection:
+         # Create the instruments table if it does not exist
+         create_table_query = '''
+@@ -58,7 +56,8 @@
+                 maximumPositionSize TEXT,
+                 maximumOrderUnits TEXT,
+                 marginRate TEXT,
+-                guaranteedStopLossOrderMode TEXT
++                guaranteedStopLossOrderMode TEXT,
++                last_updated TIMESTAMP
+             )
+         '''
+         execute_db_query(connection, create_table_query)
+@@ -66,35 +65,34 @@
+         # Iterate through each item in the data and insert or update the record
+         for item in data:
+             upsert_query = '''
+-                INSERT INTO instruments (name, type, displayName, pipLocation, displayPrecision, tradeUnitsPrecision, 
+-                minimumTradeSize, maximumTrailingStopDistance, minimumTrailingStopDistance, maximumPositionSize, 
+-                maximumOrderUnits, marginRate, guaranteedStopLossOrderMode) 
+-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++                INSERT INTO instruments (name, type, displayName, pipLocation, displayPrecision, tradeUnitsPrecision,
++                minimumTradeSize, maximumTrailingStopDistance, minimumTrailingStopDistance, maximumPositionSize,
++                maximumOrderUnits, marginRate, guaranteedStopLossOrderMode, last_updated)
++                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(name) DO UPDATE SET
+-                type = excluded.type, displayName = excluded.displayName, pipLocation = excluded.pipLocation, 
+-                displayPrecision = excluded.displayPrecision, tradeUnitsPrecision = excluded.tradeUnitsPrecision, 
+-                minimumTradeSize = excluded.minimumTradeSize, maximumTrailingStopDistance = excluded.maximumTrailingStopDistance, 
+-                minimumTrailingStopDistance = excluded.minimumTrailingStopDistance, maximumPositionSize = excluded.maximumPositionSize, 
+-                maximumOrderUnits = excluded.maximumOrderUnits, marginRate = excluded.marginRate, 
+-                guaranteedStopLossOrderMode = excluded.guaranteedStopLossOrderMode
++                type = excluded.type, displayName = excluded.displayName, pipLocation = excluded.pipLocation,
++                displayPrecision = excluded.displayPrecision, tradeUnitsPrecision = excluded.tradeUnitsPrecision,
++                minimumTradeSize = excluded.minimumTradeSize, maximumTrailingStopDistance = excluded.maximumTrailingStopDistance,
++                minimumTrailingStopDistance = excluded.minimumTrailingStopDistance, maximumPositionSize = excluded.maximumPositionSize,
++                maximumOrderUnits = excluded.maximumOrderUnits, marginRate = excluded.marginRate,
++                guaranteedStopLossOrderMode = excluded.guaranteedStopLossOrderMode, last_updated = excluded.last_updated
+             '''
+             execute_db_query(connection, upsert_query, (
+                 item['name'], item['type'], item['displayName'], item['pipLocation'],
+                 item['displayPrecision'], item['tradeUnitsPrecision'], item['minimumTradeSize'],
+                 item['maximumTrailingStopDistance'], item['minimumTrailingStopDistance'],
+                 item['maximumPositionSize'], item['maximumOrderUnits'], item['marginRate'],
+-                item['guaranteedStopLossOrderMode']
++                item['guaranteedStopLossOrderMode'], datetime.now()
+             ))
+ 
+-        # Committing is handled by the context manager
+-        #logging.info("Instruments table updated.")
+ 
+ def extract_bar_data(data):
+     # Create a DataFrame from the list of dictionaries
+     df = pd.DataFrame(data)
+ 
+     # Extract the 'mid' column into separate 'open', 'high', 'low', and 'close' columns
+-    df[['open', 'high', 'low', 'close']] = df['mid'].apply(lambda x: pd.Series([x['o'], x['h'], x['l'], x['c']]).astype(float))
++    df[['open', 'high', 'low', 'close']] = df['mid'].apply(
++        lambda x: pd.Series([x['o'], x['h'], x['l'], x['c']]).astype(float))
+ 
+     # Drop the 'mid' column as it's no longer needed
+     df.drop(columns=['mid'], inplace=True)
+@@ -104,6 +102,7 @@
+ 
+     return df
+ 
++
+ def ensure_bars_tables_exists():
+     with connect_to_db() as connection:
+         # Create the necessary tables if they don't exist
+@@ -139,8 +138,9 @@
+         for query in create_tables_queries:
+             execute_db_query(connection, query)
+ 
+-        #logging.info("History tables created.")
++        # logging.info("History tables created.")
+ 
++
+ def save_historical_data(historical_data, instrument, granularity):
+     ensure_bars_tables_exists()
+     with connect_to_db() as connection:
+@@ -171,6 +171,31 @@
+         logging.info("Historical data save complete.")
+ 
+ 
++def log_order(order_response):
++    logging.info(f"Order response: {order_response}")
++    with connect_to_db() as connection:
++        create_table_query = '''
++            CREATE TABLE IF NOT EXISTS orders (
++                id TEXT PRIMARY KEY,
++                instrument TEXT,
++                units INTEGER,
++                time TEXT,
++                price REAL,
++                type TEXT,
++                side TEXT,
++                stop_loss REAL,
++                take_profit REAL,
++                expiry TEXT,
++                lower_bound REAL,
++                upper_bound REAL,
++                trailing_stop REAL
++            )'''
++        # Prepare the insert query
++        insert_order_query = '''
++            INSERT INTO orders (id, instrument, units, time, price, type, side, stop_loss, take_profit, expiry, lower_bound, upper_bound, trailing_stop)
++        '''
++
++
+ # Helper function to parse ISO 8601 formatted date
+ def parse_iso8601_date(iso_date):
+     """Parse an ISO 8601 formatted date."""
+@@ -216,6 +241,7 @@
+     # Return the corresponding minutes, defaulting to 0 if granularity is not recognized
+     return granularity_map.get(granularity, 0)
+ 
++
+ def fetch_historical_data(instrument, granularity, count, access_token):
+     ensure_bars_tables_exists()
+     with connect_to_db() as connection:
+@@ -230,25 +256,32 @@
+         result = execute_db_query(connection, fetch_query, (instrument, granularity, count), fetch_all=True)
+ 
+         if result:
+-            logging.info(f"Retrieved {len(result)} rows of historical data for {instrument} at {granularity} granularity.")
++            # logging.info(
++            #     f"Retrieved {len(result)} rows of historical data for {instrument} at {granularity} granularity.")
+             if len(result) < count:
+-                logging.warning(f"Insufficient data found for {instrument} at {granularity} granularity. Fetching from API.")
++                logging.warning(
++                    f"Insufficient data found for {instrument} at {granularity} granularity. Fetching from API.")
+                 api_data = get_historical_data(count, granularity, access_token, instrument)
+                 save_historical_data(api_data, instrument, granularity)
+                 return extract_bar_data(api_data)
+-            bar_df = pd.DataFrame(result, columns=['time', 'open', 'high', 'low', 'close', 'volume', 'complete']).sort_values(by='time').reset_index(drop=True)
++            bar_df = pd.DataFrame(result,
++                                  columns=['time', 'open', 'high', 'low', 'close', 'volume', 'complete']).sort_values(
++                by='time').reset_index(drop=True)
+             bar_df[['open', 'high', 'low', 'close']] = bar_df[['open', 'high', 'low', 'close']].astype(float)
+-            latest_bar_time = parse_iso8601_date(bar_df.iloc[-1]['time'])  # Assuming the data is sorted in ascending order
++            latest_bar_time = parse_iso8601_date(
++                bar_df.iloc[-1]['time'])  # Assuming the data is sorted in ascending order
+             if datetime.utcnow() > latest_bar_time + timedelta(minutes=granularity_to_minutes(granularity)):
+ 
+                 logging.info("Latest bar is outdated. Fetching new data from API.")
+-                api_data = get_historical_data(count=count, granularity=granularity, access_token=access_token, instrument=instrument)
++                api_data = get_historical_data(count=count, granularity=granularity, access_token=access_token,
++                                               instrument=instrument)
+                 save_historical_data(api_data, instrument, granularity)
+                 # Update the DataFrame with new data
+                 df_new_data = extract_bar_data(api_data)
+                 # Concatenate and sort if new data is not empty
+                 if not df_new_data.empty:
+-                    bar_df = pd.concat([bar_df, df_new_data], ignore_index=True).sort_values(by='time').reset_index(drop=True)
++                    bar_df = pd.concat([bar_df, df_new_data], ignore_index=True).sort_values(by='time').reset_index(
++                        drop=True)
+ 
+             return bar_df
+ 
+@@ -257,7 +290,7 @@
+             api_data = get_historical_data(count, granularity, access_token, instrument)
+             save_historical_data(api_data, instrument, granularity)
+             bars_df = extract_bar_data(api_data)
+-            #save_historical_data(api_data, instrument, granularity)
++            # save_historical_data(api_data, instrument, granularity)
+             return bars_df
+ 
+ 
+@@ -273,12 +306,6 @@
+     The value of the specified attribute for the currency pair, or None if not found.
+     """
+     with connect_to_db() as connection:
+-        # Prepare the query to retrieve the attribute for the specified currency pair
+-        # It's important to ensure that 'attribute' is a valid and safe string since it can't be parameterized
+-        # Consider whitelisting allowed attributes to prevent SQL injection
+-        # if attribute not in ['safe_attribute1', 'safe_attribute2', 'displayName']:  # Example whitelist
+-        #     logging.error(f"Invalid attribute name: {attribute}")
+-        #     return None
+ 
+         query = f"SELECT {attribute} FROM instruments WHERE name = ?"
+ 
+@@ -310,8 +337,6 @@
+         if result:
+             # Convert the result to a list of currency pairs
+             instrument_list = [item[0] for item in result]
+-            # Uncomment the next line if you want to log the retrieved instrument list
+-            # logging.info(f"Retrieved instrument list: {instrument_list}")
+             return instrument_list
+         else:
+             logging.warning("No data found for instrument list.")
+Index: .idea/.gitignore
+===================================================================
+diff --git a/.idea/.gitignore b/.idea/.gitignore
+deleted file mode 100644
+--- a/.idea/.gitignore	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ /dev/null	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
+@@ -1,8 +0,0 @@
+-# Default ignored files
+-/shelf/
+-/workspace.xml
+-# Editor-based HTTP Client requests
+-/httpRequests/
+-# Datasource local storage ignored files
+-/dataSources/
+-/dataSources.local.xml
+Index: MyStrat.py
+===================================================================
+diff --git a/MyStrat.py b/MyStrat.py
+deleted file mode 100644
+--- a/MyStrat.py	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ /dev/null	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
+@@ -1,227 +0,0 @@
+-import logging
+-from datetime import datetime, timedelta
+-
+-import oandapyV20.endpoints.accounts as accounts
+-import oandapyV20.endpoints.instruments as instruments
+-import oandapyV20.endpoints.orders as orders
+-import oandapyV20.endpoints.positions as positions
+-import oandapyV20.endpoints.pricing as pricing
+-import pandas_ta as ta
+-from oandapyV20 import API
+-
+-from database_functions import get_instrument_value, get_instrument_list, fetch_historical_data, set_instruments_table
+-
+-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s : %(message)s')
+-
+-
+-class OandaGrid:
+-    def __init__(self, access_token, instrument, environment="demo"):
+-        self.api = API(access_token=access_token, environment=environment)
+-        self.access_token = access_token
+-        self.account_id = self.get_primary_account_id()
+-        self.set_account_instruments()
+-        self.instrument = instrument
+-        self.grid_settings = {
+-            "size_pct": 0.0001,
+-            "num": 5,
+-            "tp_pct": 0.01,
+-            "sl_pct": 0.01,
+-            "order_size_percent": 3
+-        }
+-        self.timer = datetime.utcnow() - timedelta(days=1)
+-        self.is_grid_active = False
+-        self.grid_setup_time = datetime.utcnow() - timedelta(days=8)
+-        self.is_ranging = None
+-
+-
+-    def initialize_grid_parameters(self):
+-        self.set_conversion_factors()
+-        self.pip_value = self.get_pip_value()
+-
+-
+-    def set_account_instruments(self):
+-        r = accounts.AccountInstruments(accountID=self.account_id)
+-        response = self.api.request(r)
+-        set_instruments_table(response.get('instruments'))
+-
+-    def get_primary_account_id(self):
+-        accounts_response = self.api.request(accounts.AccountList())
+-        return accounts_response['accounts'][0]['id']
+-
+-    def get_account_balance(self):
+-        response = self.api.request(accounts.AccountDetails(self.account_id))
+-        return float(response['account']['balance'])
+-
+-    def get_current_price(self):
+-        response = self.api.request(
+-            instruments.InstrumentsCandles(instrument=self.instrument, params={"count": 1, "granularity": "S5"}))
+-        return float(response['candles'][0]['mid']['c'])
+-
+-    def compute_indicator(self, data, indicator_func, include_volume, **kwargs):
+-        high, low, close = data['high'], data['low'], data['close']
+-        if not include_volume:
+-            return indicator_func(high=high, low=low, close=close, **kwargs).to_numpy()
+-        else:
+-            volume = data['volume']
+-            return indicator_func(high=high, low=low, close=close, volume=volume, **kwargs).to_numpy()
+-
+-    # def select_instrument_based_on_chop(self):
+-    #     self.chop_settings = {"length": 14, "atr_length": 1, "high": 61.8, "low": 38.2}
+-    #     self.fetch_settings = {"granularity": 'D', "count": 30}
+-    #     viable_ranging_instruments = []  # Change to a list
+-    #     viable_trending_instruments = []  # Change to a list
+-    #
+-    #     for instrument in get_instrument_list():
+-    #         data = fetch_historical_data(instrument=instrument, **self.fetch_settings, access_token=self.access_token)
+-    #         chop_values = self.compute_indicator(data=data, indicator_func=ta.chop, include_volume=False,
+-    #                                              length=self.chop_settings['length'])
+-    #
+-    #         if chop_values[-1] > self.chop_settings['high'] and chop_values[-2] <= self.chop_settings['high']:
+-    #             viable_ranging_instruments.append(
+-    #                 {"instrument": instrument, "chop_value": chop_values[-1]})  # Use append
+-    #             logging.info(
+-    #                 f"Instrument: {instrument} is a viable instrument for grid, Last CHOP Value: {chop_values[-1]}")
+-    #         elif chop_values[-1] < self.chop_settings['low'] and chop_values[-2] >= self.chop_settings['low']:
+-    #             viable_trending_instruments.append(
+-    #                 {"instrument": instrument, "chop_value": chop_values[-1]})  # Use append
+-    #             logging.info(
+-    #                 f"Instrument: {instrument} is trending, Last CHOP Value: {chop_values[-1]}")
+-    #
+-    #     if not viable_ranging_instruments and not viable_trending_instruments:
+-    #         logging.warning("No viable instruments found using CHOP indicator. Exiting...")
+-    #         return None
+-    #
+-    #     if viable_ranging_instruments:
+-    #         self.is_ranging = True
+-    #         # Find the dictionary with the max 'chop_value'
+-    #         selected_instrument_info = max(viable_ranging_instruments, key=lambda x: x['chop_value'])
+-    #         # Set 'self.instrument' to just the instrument identifier, not the entire dictionary
+-    #         self.instrument = selected_instrument_info['instrument']
+-    #         self.initialize_grid_parameters()
+-    #         logging.info(f"Selected {self.instrument} for grid trading based on CHOP indicator.")
+-    #
+-    def set_instrument_based_on_chop(self):
+-        self.chop_settings = {"length": 14, "atr_length": 1, "high": 61.8, "low": 38.2}
+-        self.fetch_settings = {"granularity": 'D', "count": 30}
+-        highest_chop_value = 0
+-        highest_chop_instrument = None
+-        for instrument in get_instrument_list():
+-            data = fetch_historical_data(instrument=instrument, **self.fetch_settings, access_token=self.access_token)
+-            chop_values = self.compute_indicator(data=data, indicator_func=ta.chop, include_volume=False,
+-                                                 length=self.chop_settings['length'])
+-
+-            if chop_values[-1] > self.chop_settings['high']:
+-                if chop_values[-1] > highest_chop_value:
+-                    highest_chop_value = chop_values[-1]
+-                    highest_chop_instrument = instrument
+-                logging.info(
+-                    f"Instrument: {instrument} is a viable instrument for grid, Last CHOP Value: {chop_values[-1]}")
+-
+-
+-        if highest_chop_instrument:
+-            self.is_ranging = True
+-            self.instrument = highest_chop_instrument
+-            self.run_strategy()
+-
+-            logging.info(f"Selected {self.instrument} for grid trading based on CHOP indicator.")
+-        else:
+-            logging.warning("No viable instruments found using CHOP indicator. Exiting...")
+-            return None
+-
+-    def adjust_price_to_pip_location(self, price):
+-        return round(price / self.pip_value) * self.pip_value
+-
+-    def set_conversion_factors(self):
+-        response = self.api.request(
+-            pricing.PricingInfo(accountID=self.account_id, params={"instruments": self.instrument}))
+-        factors = response['prices'][0]['quoteHomeConversionFactors']
+-        self.conversion_factor_pos = float(factors['positiveUnits'])
+-        self.conversion_factor_neg = float(factors['negativeUnits'])
+-
+-    def place_grid_orders(self, is_buy):
+-        current_price = self.get_current_price()
+-        for i in range(1, self.grid_settings["num"] + 1):
+-            price_adjustment = i * self.grid_settings["size_pct"] * current_price
+-            order_price = self.adjust_price_to_pip_location(
+-                current_price + (-price_adjustment if is_buy else price_adjustment))
+-            self.create_order(is_buy, order_price)
+-
+-    def get_pip_value(self):
+-        try:
+-            return 10 ** abs(int(get_instrument_value(self.instrument, 'pipLocation')))
+-        except:
+-            logging.warning(f"Could not find pip location for {self.instrument}")
+-
+-    def create_order(self, is_buy, price):
+-        units = self.calculate_order_size(is_buy)
+-        take_profit, stop_loss = self.calculate_order_targets(price, is_buy)
+-        order_data = {
+-            "instrument": self.instrument, "units": str(units), "type": "LIMIT", "price": str(price),
+-            "takeProfitOnFill": {"price": str(take_profit)}, "stopLossOnFill": {"price": str(stop_loss)},
+-            "positionFill": "DEFAULT"
+-        }
+-        self.api.request(orders.OrderCreate(self.account_id, data={"order": order_data}))
+-
+-    def calculate_order_size(self, is_buy):
+-        balance = self.get_account_balance()
+-        # Base order size as a percentage of the balance
+-        order_size_base = balance * self.grid_settings["order_size_percent"] / 100
+-        current_price = self.get_current_price()
+-
+-        # Calculate the adjusted size based on the pip value
+-        if is_buy:
+-            adjusted_size = (order_size_base / current_price) * self.conversion_factor_pos * self.pip_value
+-        else:
+-            adjusted_size = (order_size_base / current_price) * self.conversion_factor_neg * self.pip_value
+-
+-        return int(adjusted_size) if is_buy else -int(adjusted_size)
+-
+-    def calculate_order_targets(self, price, is_buy):
+-        tp_adjustment = price * self.grid_settings["tp_pct"]
+-        sl_adjustment = price * self.grid_settings["sl_pct"]
+-        take_profit = self.adjust_price_to_pip_location(price + (tp_adjustment if is_buy else -tp_adjustment))
+-        stop_loss = self.adjust_price_to_pip_location(price - (sl_adjustment if is_buy else +sl_adjustment))
+-        return take_profit, stop_loss
+-
+-    def reset_grid(self):
+-        self.close_all_positions()
+-        self.cancel_all_orders()
+-        self.is_grid_active = False
+-        self.timer = datetime.utcnow()
+-        logging.info("Grid reset.")
+-
+-    def close_all_positions(self):
+-        positions = self.get_current_positions()
+-        if positions:
+-            r = positions.PositionClose(self.account_id, self.instrument,
+-                                        data={"longUnits": "ALL", "shortUnits": "ALL"})
+-            self.api.request(r)
+-
+-    def get_current_positions(self):
+-        r = positions.OpenPositions(self.account_id)
+-        return self.api.request(r)['positions']
+-
+-    def cancel_all_orders(self):
+-        r = orders.OrdersPending(self.account_id)
+-        open_orders = self.api.request(r)['orders']
+-        for order in open_orders:
+-            r = orders.OrderCancel(self.account_id, order['id'])
+-            self.api.request(r)
+-
+-    def run_strategy(self):
+-        if datetime.utcnow() <= self.timer + timedelta(hours=24):
+-            self.set_instrument_based_on_chop()
+-            if self.is_market_condition_favorable():
+-                self.activate_grid()
+-
+-    def is_market_condition_favorable(self):
+-        # Implementation to check market conditions based on indicators
+-        return True
+-
+-    def activate_grid(self):
+-        if not self.is_grid_active:
+-            self.is_grid_active = True
+-            self.initialize_grid_parameters()
+-            self.place_grid_orders(is_buy=True)
+-            self.place_grid_orders(is_buy=False)
+-            self.grid_setup_time = datetime.utcnow()
+Index: .idea/inspectionProfiles/Project_Default.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><component name=\"InspectionProjectProfileManager\">\r\n  <profile version=\"1.0\">\r\n    <option name=\"myName\" value=\"Project Default\" />\r\n    <inspection_tool class=\"PyPackageRequirementsInspection\" enabled=\"true\" level=\"WARNING\" enabled_by_default=\"true\">\r\n      <option name=\"ignoredPackages\">\r\n        <value>\r\n          <list size=\"13\">\r\n            <item index=\"0\" class=\"java.lang.String\" itemvalue=\"scikit-learn\" />\r\n            <item index=\"1\" class=\"java.lang.String\" itemvalue=\"aiolimiter\" />\r\n            <item index=\"2\" class=\"java.lang.String\" itemvalue=\"python-dateutil\" />\r\n            <item index=\"3\" class=\"java.lang.String\" itemvalue=\"aiofiles\" />\r\n            <item index=\"4\" class=\"java.lang.String\" itemvalue=\"numpy\" />\r\n            <item index=\"5\" class=\"java.lang.String\" itemvalue=\"requests\" />\r\n            <item index=\"6\" class=\"java.lang.String\" itemvalue=\"tqdm\" />\r\n            <item index=\"7\" class=\"java.lang.String\" itemvalue=\"pandas\" />\r\n            <item index=\"8\" class=\"java.lang.String\" itemvalue=\"tensorflow\" />\r\n            <item index=\"9\" class=\"java.lang.String\" itemvalue=\"backtrader\" />\r\n            <item index=\"10\" class=\"java.lang.String\" itemvalue=\"sentencepiece\" />\r\n            <item index=\"11\" class=\"java.lang.String\" itemvalue=\"tenacity\" />\r\n            <item index=\"12\" class=\"java.lang.String\" itemvalue=\"aiohttp\" />\r\n          </list>\r\n        </value>\r\n      </option>\r\n    </inspection_tool>\r\n  </profile>\r\n</component>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/inspectionProfiles/Project_Default.xml b/.idea/inspectionProfiles/Project_Default.xml
+--- a/.idea/inspectionProfiles/Project_Default.xml	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ b/.idea/inspectionProfiles/Project_Default.xml	(date 1706826070305)
+@@ -4,7 +4,7 @@
+     <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+       <option name="ignoredPackages">
+         <value>
+-          <list size="13">
++          <list size="14">
+             <item index="0" class="java.lang.String" itemvalue="scikit-learn" />
+             <item index="1" class="java.lang.String" itemvalue="aiolimiter" />
+             <item index="2" class="java.lang.String" itemvalue="python-dateutil" />
+@@ -18,6 +18,7 @@
+             <item index="10" class="java.lang.String" itemvalue="sentencepiece" />
+             <item index="11" class="java.lang.String" itemvalue="tenacity" />
+             <item index="12" class="java.lang.String" itemvalue="aiohttp" />
++            <item index="13" class="java.lang.String" itemvalue="pandas_ta" />
+           </list>
+         </value>
+       </option>
+Index: .idea/dataSources.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"DataSourceManagerImpl\" format=\"xml\" multifile-model=\"true\">\r\n    <data-source source=\"LOCAL\" name=\"oanda_data\" uuid=\"2c5f37b7-7f68-4e36-83cf-690470b25938\">\r\n      <driver-ref>sqlite.xerial</driver-ref>\r\n      <synchronize>true</synchronize>\r\n      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>\r\n      <jdbc-url>jdbc:sqlite:G:\\PycharmProjects\\oandagridbot\\data\\oanda_data.db</jdbc-url>\r\n      <working-dir>$ProjectFileDir$</working-dir>\r\n      <libraries>\r\n        <library>\r\n          <url>file://$APPLICATION_CONFIG_DIR$/jdbc-drivers/Xerial SQLiteJDBC/3.43.0/org/xerial/sqlite-jdbc/3.43.0.0/sqlite-jdbc-3.43.0.0.jar</url>\r\n        </library>\r\n      </libraries>\r\n    </data-source>\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/dataSources.xml b/.idea/dataSources.xml
+--- a/.idea/dataSources.xml	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ b/.idea/dataSources.xml	(date 1706829437610)
+@@ -1,7 +1,7 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
+-    <data-source source="LOCAL" name="oanda_data" uuid="2c5f37b7-7f68-4e36-83cf-690470b25938">
++    <data-source source="LOCAL" name="oanda_data" uuid="503bc0b9-4f48-4a43-9776-2895b8940e40">
+       <driver-ref>sqlite.xerial</driver-ref>
+       <synchronize>true</synchronize>
+       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
+Index: .idea/vcs.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"VcsDirectoryMappings\">\r\n    <mapping directory=\"$PROJECT_DIR$\" vcs=\"Git\" />\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/vcs.xml b/.idea/vcs.xml
+--- a/.idea/vcs.xml	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ b/.idea/vcs.xml	(date 1706826070396)
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+   <component name="VcsDirectoryMappings">
+-    <mapping directory="$PROJECT_DIR$" vcs="Git" />
++    <mapping directory="" vcs="Git" />
+   </component>
+ </project>
+\ No newline at end of file
+Index: .idea/oandagridbot.iml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<module type=\"PYTHON_MODULE\" version=\"4\">\r\n  <component name=\"NewModuleRootManager\">\r\n    <content url=\"file://$MODULE_DIR$\">\r\n      <excludeFolder url=\"file://$MODULE_DIR$/.venv\" />\r\n    </content>\r\n    <orderEntry type=\"inheritedJdk\" />\r\n    <orderEntry type=\"sourceFolder\" forTests=\"false\" />\r\n  </component>\r\n</module>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/oandagridbot.iml b/.idea/oandagridbot.iml
+--- a/.idea/oandagridbot.iml	(revision 35e6ab5c56a4439c4c8b005401210356c4892fe1)
++++ b/.idea/oandagridbot.iml	(date 1706826070372)
+@@ -7,4 +7,8 @@
+     <orderEntry type="inheritedJdk" />
+     <orderEntry type="sourceFolder" forTests="false" />
+   </component>
++  <component name="PyDocumentationSettings">
++    <option name="format" value="PLAIN" />
++    <option name="myDocStringFormat" value="Plain" />
++  </component>
+ </module>
+\ No newline at end of file
+Index: src/grid_bot.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/grid_bot.py b/src/grid_bot.py
+new file mode 100644
+--- /dev/null	(date 1706831051321)
++++ b/src/grid_bot.py	(date 1706831051321)
+@@ -0,0 +1,131 @@
++import logging
++from datetime import datetime
++
++from src.database_functions import get_instrument_value
++
++logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s : %(message)s')
++
++from src.bot_utils import BotUtils
++
++
++# -----------------Grid Bot Classes-----------------#
++
++class GridBot:
++    def __init__(self, main_bot, instrument):
++        self.utils = BotUtils(main_bot)  # Creates a new BotUtils instance for each GridBot
++        self.utils.instrument = instrument
++        self.account_id = main_bot.account_id
++        self.api = main_bot.api
++        self.access_token = main_bot.access_token
++        self.instrument = instrument
++        self.available_funds = main_bot.funds_available_for_grid
++        self.grid_settings = main_bot.grid_settings
++        # Initialize other necessary instance-specific attributes here...
++        #self.initialize_grid_parameters()  # Make sure this is called to set up instance-specific settings
++
++
++
++        self.is_grid_active = None
++        self.is_long = None
++        self.is_ranging = None
++
++
++
++        self.pip_location = self.utils.get_pip_location()
++        self.pip_value = self.utils.get_pip_value()
++        self.long_available_units = None
++        self.short_available_units = None
++        self.conversion_factor_pos = None
++        self.conversion_factor_neg = None
++        self.adjust_price_to_pip_location = self.utils.adjust_price_to_pip_location
++        self.set_available_units()
++
++
++
++
++    def set_available_units(self):
++        logging.info(f"Setting available units for {self.instrument}")
++        self.conversion_factor_pos = self.utils.conversion_factor_pos
++        self.conversion_factor_neg = self.utils.conversion_factor_neg
++        self.long_available_units = int(self.available_funds * self.conversion_factor_pos / self.grid_settings[
++            'order_limit'])
++        self.short_available_units = int(self.available_funds * self.conversion_factor_neg / self.grid_settings[
++            'order_limit'])
++        logging.info(
++            f"Available units for grid using {self.instrument}: Long: {self.long_available_units}, Short: {self.short_available_units}")
++
++    # def initialize_parameters(self):
++    #     self.is_grid_active = True
++    #     logging.info(f"Grid initialized for {self.instrument}.")
++    #     logging.info(
++    #         f"Available units for grid using {self.instrument}: Long: {self.long_available_units}, Short: {self.short_available_units}, Pip Location: {self.pip_location}, Pip Value: {self.pip_value}")
++
++    def reset_grid(self):
++        # TODO - ENSURE ONLY GRID ORDERS ARE CANCELLED
++        # self.close_all_positions()
++        # self.cancel_all_orders()
++        self.is_grid_active = False
++        logging.info("Grid reset.")
++        self.activate_grid()
++
++    def run_strategy(self):
++        self.activate_grid()
++        # self.check_grid_status()
++
++    def check_grid_status(self):
++        logging.info(f"Checking grid status for {self.instrument}")
++        pos = self.utils.get_current_positions()
++        if pos:
++            if not self.is_market_condition_favorable():
++                self.reset_grid()
++        else:
++            orders = self.utils.get_open_orders()
++
++            if orders:
++                if not self.is_market_condition_favorable():
++                    self.reset_grid()
++            else:
++                self.reset_grid()
++
++    def place_atr_based_orders(self):
++        current_price = self.get_current_price()
++        atr = self.get_recent_atr()
++        adjusted_atr = self.adjust_price_to_pip_location(current_price)
++
++        atr_factor = self.grid_settings['entry_atr_factor']
++
++        long_entry_price = current_price - adjusted_atr
++        short_entry_price = current_price + adjusted_atr
++
++        adjusted_long_entry_price = self.adjust_price_to_pip_location(long_entry_price)
++        adjusted_short_entry_price = self.adjust_price_to_pip_location(short_entry_price)
++
++        sl_distance = atr * self.grid_settings['sl_atr_factor']
++        tp_distance = atr * self.grid_settings['tp_atr_factor']
++
++        buy_take_profit = self.adjust_price_to_pip_location(current_price + tp_distance)
++        sell_take_profit = self.adjust_price_to_pip_location(current_price - tp_distance)
++
++        # Calculate and place orders
++        self.utils.place_order(price=adjusted_long_entry_price,
++                               units=self.long_available_units,
++                               take_profit=buy_take_profit,
++                               stop_loss_distance=sl_distance)  # Long order at current price + ATR
++
++        self.utils.place_order(price=adjusted_short_entry_price,
++                               units=self.short_available_units,
++                               take_profit=sell_take_profit,
++                               stop_loss_distance=sl_distance)  # Short order at current price - ATR
++        logging.info(f"Orders placed for {self.instrument}")
++
++    def is_market_condition_favorable(self):
++        logging.info(f"Checking market condition for {self.instrument}")
++        return True
++
++    def activate_grid(self):
++        if not self.is_grid_active:
++            logging.info(f"Activating grid for {self.instrument}")
++            self.is_grid_active = True
++            #self.initialize_grid_parameters()
++            #self.place_atr_based_orders()
++            #self.grid_setup_time = datetime.utcnow()
